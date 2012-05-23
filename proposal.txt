@@ -1,0 +1,10 @@
+I'd like to make a neural network, and train it on data like points uniformly randomly sampled from e.g. the "interior" (concave face) of arbitrary higher-order functions. For example, take $x^2$, and randomly take points $(x,y) :  x^2 >= y$ (in order to make this tractable, there'd need to be an arbitrary boundary on $x$, say $x \leq 4$). I'd like to  use a neural network to approximate the function $f(x) = x^2$. I'd like to expirement with different numbers of hiddens layers and different numbers of hidden nodes within each layer, and see what kind of results I'd get. Ideally, there would also be a visualization portion built in. 
+
+In summary: 
+
+* implement a neural network system with gradient descent etc.
+* train it on random points from functions (e.g. runif(1000,0,4)^2) and test on other randomly drawn data
+(* visualize the results; draw the "lines" the neural network produces)
+* this would probably require some sort of write-up
+
+Is this cool?
