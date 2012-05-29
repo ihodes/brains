@@ -5,131 +5,196 @@ Author: Isaac Hodes
 Date: May 2012
 Requires: Python 2.7
 
-A simple, 2-layer, neural network.
-
 """
+import math, random
 
-import math
+DEBUG = False
+if DEBUG: import pprint
 
+
+# math utilities 
 def dot(a,b):
     """Returns the dot products of a and b"""
+    assert(len(a) == len(b)), "Length of a and b must be the same"
     return sum([i*j for (i,j) in zip(a,b)])
 
-def logistic1(x):
-    """Returns the value at x of the logistic function."""
-    return 1/(1 + math.exp(-x))
+def g(x):
+    return 1/(1+math.exp(-x))
 
-def logistic_(x):
-    """Returns the value at x of the derivative of logistic."""
-    return math.exp(x)/((1 + math.exp(x))**2)
+def g_(x):
+    return (1-g(x))*g(x)
+
 
 class NeuralNetwork(object):
-    def __init__(self, inputs=[], hidden={}, outputs={}):
-        """
-        inputs of the form ["inputName1", "inputName2 ... ]
-        hidden of the form {0:{'inputs': [0,3,4], 'weights': [1.1,2.3,7.1], 't':1.5},
-                            1: { ... } ... }
-        output of the form {0:{'hidden': [0,1], 'weights': [-0.8, 2.1], 't':-2.3}, 
-                            1: { ... } ... }
-        """
-        self.inputs = inputs
-        self.hidden = hidden
-        self.outputs = outputs
+    """
+    A three-layer complete neural network with backpropagation training.
+    """
+    def __init__(self, inputs, hidden, outputs):
+        self.num_inputs = inputs # NB: + 1 for bias
+        self.num_hidden = hidden # NB: + 1 for bias
+        self.num_outputs = outputs
+        self.hidden = [[0] * (inputs+1)] * hidden
+        self.outputs = [[0] * (hidden+1)] * outputs
+        self.initialize_weights()
 
-    def add_input(self, name):
-        self.inputs.append(name)
-
-    def add_hidden(self, inputs, weights, threshold):
-        self.hidden[len(self.hidden)] = {'inputs':inputs, 'weights':weights,
-                                         't':threshold}
-
-    def add_output(self, hidden, weights, threshold):
-        self.outputs[len(self.outputs)] = {'inputs':hidden, 'weights':weights,
-                                           't':threshold}
-
-    def remove_input(self, name):
-        idx = self.inputs.index(name)
-        self.inputs.remove(name)
-        for _,hidden in self.hidden.iteritems():
-            if idx in hidden['inputs']:
-                hidden['inputs'].remove(idx)
-
-    def remove_hidden(self, idx):
-        del self.hidden[idx]
-        for _,output in self.outputs.iteritems():
-            if idx in output['inputs']:
-                output['inputs'].remove(idx)
-
-    def remove_output(self, idx):
-        del self.outputs[idx]
-
-    def run(self, input_values):
-        # calculate the value of the hidden nodes
-        hidden_values = []
-        for _,hidden in self.hidden.iteritems():
-            req_ins = [1] + [input_values[i] for i in hidden['inputs']]
-            req_weights = [hidden['t']] + hidden['weights']
-            val = logistic(dot(req_ins, req_weights))
-            hidden_values.append(val)
-
-        # calculate the value of the output nodes
-        output_values = []
-        for _,output in self.outputs.iteritems():
-            req_ins = [1] + [hidden_values[i] for i in output['inputs']]
-            req_weights = [output['t']] + output['weights']
-            val = logistic(dot(req_ins, req_weights))
-            output_values.append(val)
-        return hidden_values,output_values
-
-    def calculate_outputs(self, input_values):
+    def calculate_outputs(self, x):
         """Runs the neural network with the given inputs, and returns the
         outputs"""
-        _,output_values = self.run(input_values)
-        return output_values
+        x = [1] + x
+        hidden_ins = [dot(x, w) for w in self.hidden]
+        hidden_as = [g(i) for i in hidden_ins]
+        hidden_as = [1] + hidden_as
 
-    def train(self,training_set,alpha,n=1,tuning=[]):
+        output_ins = [dot(hidden_as, w) for w in self.outputs]
+        output_as = [g(i) for i in output_ins]
+
+        return output_as
+
+    def initialize_weights(self):
+        """Initialized all weights to random values between 0 and 1."""
+        temp_layer = []
+        for weights in self.hidden: 
+            temp_weights = []
+            for w in weights:
+                w = random.uniform(-1,1)
+                temp_weights.append(w)
+            temp_layer.append(temp_weights)
+        self.hidden = temp_layer[:]
+
+        temp_layer = []
+        for weights in self.outputs: 
+            temp_weights = []
+            for w in weights:
+                w = random.uniform(-1,1)
+                temp_weights.append(w)
+            temp_layer.append(temp_weights)
+        self.outputs = temp_layer[:]
+
+    def train(self,training_set,epochs=1,alpha=.2,tuning=[]):
         """Trains the neural network n times on each data vector,
-        or until the tuning set error begins to increase."""
+        or until  the tuning set error begins to increase."""
+        for _ in xrange(epochs):
+            for x, y in training_set:
+                hidden_ins = [dot([1] + x, weights) for weights in self.hidden]
+                hidden_as = [g(i) for i in hidden_ins]
 
-        deltas = [0]*len(training_set[1][1])
-        for _ in range(n):
-            for example in training_set:
-                inputs, outputs = example
-                hidden_values, output_values = self.run(inputs)
-                for layer in (self.hidden, self.output):
-                    pass
-                for idx,node in enumerate(self.output):
-                    delta[idx] = logistic_(hidden_values[idx]) * (outputs[idx] - logistic(hidden_values[idx]))
-                continue
-        ## this is what needs to be finished in order for it all to work
+                output_ins = [dot([1] + hidden_as, weights) for weights in self.outputs]
+                output_as = [g(i) for i in output_ins]
 
-    def test(self,testing):
+                output_deltas = [g_(output_ins[i]) * (y[i] - output_as[i])
+                                 for i in xrange(self.num_outputs)]
+
+                # no delta for the bias (=1) node (not a real node; has no weights)
+                hidden_deltas = [g_(hidden_ins[i]) * sum([self.outputs[j][i+1] * output_deltas[j]
+                                                          for j in xrange(self.num_outputs)])
+                                 for i in xrange(self.num_hidden)]
+
+                hidden_ins = [1] + hidden_ins  # need to update weights from bias node
+                # update hidden -> output weights
+                for i in xrange(self.num_outputs):
+                    for j in xrange(self.num_hidden+1): # (+ 1 bias node) weights from jth hidden to ith node
+                        self.outputs[i][j] = self.outputs[i][j] + alpha * hidden_ins[j] * output_deltas[i]
+
+                x = [1] + x # need to update weights from bias node, so we include it here
+                # update input -> hidden weights
+                for i in xrange(self.num_hidden):
+                    for j in xrange(self.num_inputs+1): # (+ 1 bias node) weights from jth x to ith node
+                        self.hidden[i][j] = self.hidden[i][j] + alpha * x[j] * hidden_deltas[i]
+
+    def test(self, test_set):
         """Returns the test set error."""
-        return sum([self.error(t[0], t[1]) for t in testing])
+        return sum([sum([0.5*(yi - oi)**2 for oi, yi in zip(self.calculate_outputs(x), y)]) 
+                    for x,y in test_set])
 
-    def error(self, inputs, outputs):
-        return 0.5 * sum([i - logistic(j),
-                          for i,j in zip(outputs, self.calculate_outputs(inputs))])**2
+    def __str__(self):
+        return "WEIGHTS\ninputs: {}\nhidden: {}\noutputs: {}".format(len(self.hidden[0]),self.hidden, self.outputs)
 
-    def clone(self):
-        """Returns a new NeuralNetwork object instantiated with the same values that self contains."""
-        return NeuralNetwork(self.inputs[:], self.hidden.copy(),
-                             self.outputs.copy())
+def _test_NN():
+    EPOCHS = 10000
 
+    # >= x^2 training set
+    #
+    # goods = [([x, x**2+random.uniform(0,10)], [1]) for x in [i*.1 for i in  range(10)] for _ in range(100)]
+    # bads = [([x, x**2-random.uniform(0,10)], [0]) for x in [i*.1 for i in  range(10)] for _ in range(100)]
+    # training_set = goods + bads
+
+    # AND, OR, XOR training set
+    # training_set = [([1, 1], [1, 1, 0]), ([1, 0], [0, 1, 1]), ([0, 1], [0, 1, 1]), ([0, 0], [0, 0, 0])]
+
+    # XOR training set
+    # training_set = [([1, 1], [0]), ([1, 0], [1]), ([0, 1], [1]), ([0, 0], [0])]
+
+    # OR training set
+    training_set = [([1, 1], [1]), ([1, 0], [1]), ([0, 1], [1]), ([0, 0], [0])] 
+
+    # AND training set
+    # training_set = [([1, 1], [1]), ([1, 0], [0]), ([0, 1], [0]), ([0, 0], [0])]
+
+    # NOR training set
+    # training_set = [([1, 1], [0]), ([1, 0], [0]), ([0, 1], [0]), ([0, 0], [1])] 
+
+    a = NeuralNetwork(2,2,1)
+    a.hidden = [[.5,.5,-.25],[.33,.22,-.11]]
+    a.outputs = [[.1,-.25,.5]]
+
+    print
+    print "epochs = ", EPOCHS
+    print
+    print "================================================================================"
+    print "================================================================================"
+    print "===== Untrained on training_set              total error = ", a.test(training_set), "====="
+    print "================================================================================"
+    for (x,y) in training_set:
+        print "for input:        ", x
+        print "expected outputs: ", y
+        print "actual outputs:   ", a.calculate_outputs(x)
+        print "error:            ", 0.5 * (sum([yi - oi for oi, yi in zip(a.calculate_outputs(x), y)])**2)
+        print "--------------------------------------------------------------------------------"
+
+    a.train(training_set, EPOCHS)
+
+    print
+    print "================================================================================"
+    print "================================================================================"
+    print "===== Results on training_set                total error = ", a.test(training_set), "====="
+    print "================================================================================"
+    for (x,y) in training_set:
+        print "for input:        ", x
+        print "expected outputs: ", y
+        print "actual outputs:   ", a.calculate_outputs(x)
+        print "error:            ", 0.5 * (sum([yi - oi for oi, yi in zip(a.calculate_outputs(x), y)])**2)
+        print "--------------------------------------------------------------------------------"    
+
+    print a
 
 def _test():
-    a = NeuralNetwork()
-    a.add_input("x")
-    a.add_input("lol")
-    a.add_input("y")
-
-    a.add_hidden([0,1,2],[0.4,-2.3,-7], 1.1)
-
-    a.add_output([0], [-5.5], -6.1)
-
-    a.remove_input("lol")
-
-    print a.calculate_outputs([1,2,3])
+    assert(dot([1,2,3],[2,3,1]) == 11), "Dot product is incorrect"
 
 if __name__ == "__main__":
-    _test()
+    _test_NN()
+
+                # if DEBUG:
+                #     print "--------------------------------------------------------------------------------"
+                #     print "x:", x
+                #     print "y:", y
+                #     print
+                #     print "hidden weights"
+                #     pprint.pprint(self.hidden)
+                #     print "output weights"
+                #     pprint.pprint(self.outputs)
+                #     print
+                #     print "hidden_ins", hidden_ins
+                #     print "hidden_as", hidden_as
+                #     print
+                #     print "output_ins", output_ins
+                #     print "output_as", output_as
+                #     print
+                #     print "hidden_deltas", hidden_deltas
+                #     print "output_deltas", output_deltas
+                #     print
+
+
+
+## run through a simple one by hand, 1 iteration, set weights to be what they are in the java applet
+## make a perceptron
+
