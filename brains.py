@@ -60,8 +60,8 @@ class NeuralNetwork(object):
                 output_deltas = [g_(output_ins[i]) * (y[i] - output_as[i])
                                  for i in range(self.num_outputs)]
 
-                hidden_deltas = [g_(hidden_ins[i]) * sum([self.outputs[j][i] * output_deltas[j]
-                                                          for j in range(self.num_outputs)])
+                hidden_deltas = [g_(hidden_ins[i]) * sum([self.outputs[end_node][i] * output_deltas[end_node]
+                                                          for end_node in range(self.num_outputs)])
                                  for i in range(self.num_hidden)]
 
                 # update hidden -> output weights
