@@ -5,6 +5,11 @@ Author: Isaac Hodes
 Date: May 2012
 Requires: Python 2.7
 
+NB:
+Code could be cleaned up considerably but not worth it; multiple layers seem in
+general bad, and require special care to make better. That, or there are some
+errors in this code (seem unlikely, as it works fairly well).
+
 """
 import math, random
 
