@@ -5,21 +5,14 @@ Author: Isaac Hodes
 Date: May 2012
 Requires: Python 2.7
 
+A backpropagating, 3-layer neural network. Algorithm from Norvig & Russel.
+
 """
 import math, random
+from linal import *
 
-# utilities 
-def dot(a,b):
-    return sum([i*j for (i,j) in zip(a,b)])
-
-def g(x):
-    return math.tanh(x)
-
-def g_(x):
-    return 1.0 - math.tanh(x)**2
-
-def matrix(nodes, weights):
-    return [[0.0] * weights for _ in range(nodes)]
+def _g(x): return math.tanh(x) # our step fn approx
+def _g_(x): return 1.0 - math.tanh(x)**2 # derivative of _g()
 
 class NeuralNetwork(object):
     """
@@ -30,8 +23,8 @@ class NeuralNetwork(object):
         self.num_hidden = hidden
         self.num_outputs = outputs
 
-        self.hidden = matrix(self.num_hidden, self.num_inputs)
-        self.outputs = matrix(self.num_outputs, self.num_hidden)
+        self.hidden = matrix(self.num_inputs, self.num_hidden)
+        self.outputs = matrix(self.num_hidden, self.num_outputs)
 
         self.initialize_weights()
 
@@ -52,15 +45,15 @@ class NeuralNetwork(object):
                 x = x + [1]
 
                 hidden_ins = [dot(x, weights) for weights in self.hidden]
-                hidden_as = [g(s) for s in hidden_ins]
+                hidden_as = [_g(s) for s in hidden_ins]
 
                 output_ins = [dot(hidden_as, weights) for weights in self.outputs]
-                output_as = [g(s) for s in output_ins]
+                output_as = [_g(s) for s in output_ins]
 
-                output_deltas = [g_(output_ins[i]) * (y[i] - output_as[i])
+                output_deltas = [_g_(output_ins[i]) * (y[i] - output_as[i])
                                  for i in range(self.num_outputs)]
 
-                hidden_deltas = [g_(hidden_ins[i]) * sum([self.outputs[end_node][i] * output_deltas[end_node]
+                hidden_deltas = [_g_(hidden_ins[i]) * sum([self.outputs[end_node][i] * output_deltas[end_node]
                                                           for end_node in range(self.num_outputs)])
                                  for i in range(self.num_hidden)]
 
@@ -78,8 +71,8 @@ class NeuralNetwork(object):
         """Runs the neural network with the given inputs, and returns the
         outputs"""
         x = x + [1]
-        hidden_as = [g(dot(x, w)) for w in self.hidden]
-        output_as = [g(dot(hidden_as, w)) for w in self.outputs]
+        hidden_as = [_g(dot(x, w)) for w in self.hidden]
+        output_as = [_g(dot(hidden_as, w)) for w in self.outputs]
 
         return output_as
 
@@ -90,20 +83,20 @@ class NeuralNetwork(object):
 
     def test(self, test_set):
         for x,y in test_set:
-            print x, '->', self.run(x), '\n should be -> ', y
+            print x, '->', self.run(x), '\n\tshould be -> ', y
+            print
 
     def __str__(self):
         return "WEIGHTS\ninputs: {}\nhidden: {}\noutputs: {}".format(len(self.hidden[0]),self.hidden, self.outputs)
 
-def test(epochs=1000):
+if __name__ == '__main__':
     # AND, OR, XOR, NOR training set
     training_set = [([1, 1], [1, 1, 0, 0]), ([1, 0], [0, 1, 1, 0]), ([0, 1], [0, 1, 1, 0]), ([0, 0], [0, 0, 0, 1])]
     test_set = training_set
 
     nn = NeuralNetwork(2, 3, 4)
+    epochs = 1000
     print "error before training: ", nn.error(test_set)
     nn.train(training_set, epochs, 0.5)
     print "error after training: ", nn.error(test_set)
     nn.test(test_set)
-
-if __name__ == '__main__': test()
