@@ -20,17 +20,17 @@ class NeuralNetwork(object):
     """
     def __init__(self, inputs, hidden, outputs):
         self.num_inputs = inputs + 1 # NB: + 1 for bias
-        self.num_hidden = hidden
+        self.num_hidden = hidden + 1 # + for bias node (which has no weights)
         self.num_outputs = outputs
 
-        self.hidden = matrix(self.num_inputs, self.num_hidden)
+        self.hidden = matrix(self.num_inputs, self.num_hidden-1)
         self.outputs = matrix(self.num_hidden, self.num_outputs)
 
         self.initialize_weights()
 
     def initialize_weights(self):
         """Initialized all weights to random values between -1 and 1."""
-        for node in xrange(self.num_hidden):
+        for node in xrange(self.num_hidden-1):
             for w in xrange(self.num_inputs):
                 self.hidden[node][w] = random.uniform(-1.0, 1.0)
 
@@ -44,7 +44,7 @@ class NeuralNetwork(object):
             x = x + [1]
             
             hidden_ins = [dot(x, weights) for weights in self.hidden]
-            hidden_as = [_g(s) for s in hidden_ins]
+            hidden_as = [_g(s) for s in hidden_ins] + [1]
 
             output_ins = [dot(hidden_as, weights) for weights in self.outputs]
             output_as = [_g(s) for s in output_ins]
@@ -54,15 +54,15 @@ class NeuralNetwork(object):
 
             hidden_deltas = [_g_(hidden_ins[i]) * sum([self.outputs[end_node][i] * output_deltas[end_node]
                                                        for end_node in xrange(self.num_outputs)])
-                             for i in xrange(self.num_hidden)]
+                             for i in xrange(self.num_hidden-1)]
 
             # update hidden -> output weights
             for node in xrange(self.num_outputs):
-                for j in xrange(self.num_hidden):
+                for j in xrange(self.num_hidden-1):
                     self.outputs[node][j] = self.outputs[node][j] + alpha * hidden_as[j] * output_deltas[node]
 
             # update input -> hidden weights
-            for node in xrange(self.num_hidden):
+            for node in xrange(self.num_hidden-1):
                 for j in xrange(self.num_inputs):
                     self.hidden[node][j] = self.hidden[node][j] + alpha * x[j] * hidden_deltas[node]
 
@@ -70,8 +70,12 @@ class NeuralNetwork(object):
         """Runs the neural network with the given inputs, and returns the
         outputs"""
         x = x + [1]
-        hidden_as = [_g(dot(x, w)) for w in self.hidden]
-        output_as = [_g(dot(hidden_as, w)) for w in self.outputs]
+            
+        hidden_ins = [dot(x, weights) for weights in self.hidden]
+        hidden_as = [_g(s) for s in hidden_ins] + [1]
+        
+        output_ins = [dot(hidden_as, weights) for weights in self.outputs]
+        output_as = [_g(s) for s in output_ins]
 
         return output_as
 
@@ -81,13 +85,20 @@ class NeuralNetwork(object):
 
     def error(self, test_set):
         """Returns the test set error."""
-        return sum([sum([0.5*(yi - oi)**2 for oi, yi in zip(self.run(x), y)])
-                    for x,y in test_set])
+        acc = 0
+
+        for x,y in test_set:
+            acc += sum([0.5*(yi - oi)**2 for oi, yi in zip(self.run(x), y)])
+        return acc
 
     def test(self, test_set):
         for x,y in test_set:
             print x, '->', self.run(x), '\n\tshould be -> ', y
             print
+
+    def run_on(self, test_set):
+        for x in test_set:
+            print x, '->', self.run(x)
 
     def __str__(self):
         return "WEIGHTS\ninputs: {}\nhidden: {}\noutputs: {}".format(len(self.hidden[0]),self.hidden, self.outputs)
