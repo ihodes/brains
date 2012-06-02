@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 main.py
 
@@ -5,16 +6,110 @@ Author: Isaac Hodes
 Date: May 2012
 Requires: Python 2.7, matplotlib
 
+A CLI for big_brains neural network, and related functionality.
+
 Example usage:
 
-python main.py --function-spec "math.log(x)" --r-xlim 3 --l-xlim 1 -t -s 'nn.txt' --epochs 100 --nn-spec "2 3 3 1"
-python main.py -lnn.txt --function-spec "math.log(x)" --r-xlim 3 --l-xlim 1 --test-png t.png
+brains --function-spec "math.log(x)" --r-xlim 3 --l-xlim 1 -t -s 'nn.txt' --epochs 100 --nn-spec "2 3 3 1"
+brains -lnn.txt --function-spec "math.log(x)" --r-xlim 3 --l-xlim 1 --test-png t.png
 
 """
 from nn.big_brains import *
 import random as r
 import argparse
-import math
+from math import *
+
+def main():
+    args = build_parser().parse_args()
+
+    # load our neural network
+    if args.nn_spec:
+        try: args.nn_spec = [int(i) for i in args.nn_spec]
+        except: raise ValueError("nn-spec must be a list of integer values")
+        nn = NeuralNetwork(args.nn_spec[0],
+                           args.nn_spec[1:-1],
+                           args.nn_spec[-1])
+    elif args.load_nn: nn = args.load_nn
+    else: raise Exception("Must specify a neural network.")
+
+    # load the classification function & generate data
+    fn = args.function_spec
+
+    if fn: 
+        test_set = classify_pts(fn, gen_pts((args.l_xlim,args.r_xlim),
+                                            (args.l_ylim,args.r_ylim),
+                                            args.testn))
+        training_set = classify_pts(fn, gen_pts((args.l_xlim,args.r_xlim),
+                                                (args.l_ylim,args.r_ylim),
+                                                args.trainn))
+
+    if args.debug: 
+        print nn        
+
+    if args.train:
+        print "before training error: ", nn.error(test_set)
+        nn.train(training_set, args.epochs, args.alpha)
+        if args.debug: print nn
+
+    if args.run:
+        exec "run_set = " + args.run
+        nn.run_on(run_set)
+    
+    if args.train: print "neural network error: ", nn.error(test_set)
+
+    # image settings
+    if args.training_png or args.test_png:
+        if not fn: raise Exception("Need to specify a function in order to classify data")
+        try:
+            import matplotlib
+            matplotlib.use('Agg')
+            import matplotlib.pyplot as p
+            import numpy as np
+        except: ImportError("matplotlib & numpy must be installed in order to display graphs")
+        x = np.arange(args.l_xlim,args.r_xlim,(-args.l_xlim + args.r_xlim)/2000.0)
+        y = [fn(i) for i in x]
+        if args.training_png:
+            p.clf()
+            above_ptsx = []
+            above_ptsy = []
+            below_ptsy = []
+            below_ptsx = []
+            for (example,_) in training_set:
+                if nn.run(example)[0] >= 0.5: # arbitrary cutoff
+                    above_ptsx.append(example[0])
+                    above_ptsy.append(example[1])
+                else:
+                    below_ptsx.append(example[0])
+                    below_ptsy.append(example[1])
+            p.xlim((args.l_xlim,args.r_xlim))
+            p.ylim((args.l_ylim,args.r_ylim))
+            p.scatter(above_ptsx, above_ptsy, color='#ee0000', s=3, marker="x")
+            p.scatter(below_ptsx, below_ptsy, color='#0044ee', s=3, marker="x")
+            p.plot(x, y, "g-", color="#009900", linewidth=1)
+            p.grid()
+            p.savefig(args.training_png)
+        if args.test_png:
+            p.clf()
+            above_ptsx = []
+            above_ptsy = []
+            below_ptsy = []
+            below_ptsx = []
+            for (example,_) in test_set:
+                if nn.run(example)[0] >= 0.5: # arbitrary cutoff
+                    above_ptsx.append(example[0])
+                    above_ptsy.append(example[1])
+                else:
+                    below_ptsx.append(example[0])
+                    below_ptsy.append(example[1])
+            p.xlim((args.l_xlim,args.r_xlim))
+            p.ylim((args.l_ylim,args.r_ylim))
+            p.scatter(above_ptsx, above_ptsy, color='#ee0000', s=3, marker="x")
+            p.scatter(below_ptsx, below_ptsy, color='#0044ee', s=3, marker="x")
+            p.plot(x, y, "g-", color="#009900", linewidth=1)
+            p.grid()
+            p.savefig(args.test_png)
+
+    if args.save_nn: save_nn(nn, args.save_nn)
 
 def gen_pts(xlims, ylims, n):
     (l_xlim, r_xlim) = xlims
@@ -91,7 +186,7 @@ def build_parser():
     parser.add_argument("-t","--train", help="train the neural network with the given options",
                         default=False, action='store_true')
     parser.add_argument("-r","--run", help="run neural network on given data" +
-                        "(a Python list of input lists)")
+                        "(a Python list of input lists)", metavar="run_data")
 
     # size of training, testing
     parser.add_argument("--trainn", help="number of training points",
@@ -110,11 +205,11 @@ def build_parser():
                         metavar="ylim", default=-1, type=int)
 
     # stopping settings (one of them must be specified)
-    parser.add_argument("--targete", help="target error (default behavior is running `epochs` times)",
-                        metavar="target_error") # TODO
-    parser.add_argument("--tuningn", help="specify a size for the tuning set to be" + 
-                        "used to stop training",
-                        metavar="tuning_n", type=int) # TODO
+    # parser.add_argument("--targete", help="target error (default behavior is running `epochs` times)",
+    #                     metavar="target_error")
+    # parser.add_argument("--tuningn", help="specify a size for the tuning set to be" + 
+    #                     "used to stop training",
+    #                     metavar="tuning_n", type=int)
     parser.add_argument("--epochs", help="the (max) number of epochs",
                         metavar="number_epochs", default=1000, type=int)
 
@@ -131,118 +226,15 @@ def build_parser():
                         metavar="output_file", default=None)
 
     # verbose & other
-    parser.add_argument("-v","--verbose",
-                        help="print errors and other information",
-                        action="store_false")
+    # parser.add_argument("-v","--verbose",
+    #                     help="print errors and other information",
+    #                     action="store_false")
     parser.add_argument("-d","--debug",
                         help="print nn and other information",
                         default=False, action='store_true')
     parser.add_argument("--alpha", help="alpha for backpropagation",
                         metavar="alpha", default=0.5, type=float)
-
     return parser
-
-def main():
-    args = build_parser().parse_args()
-
-    # load our neural network
-    if args.nn_spec:
-        try: args.nn_spec = [int(i) for i in args.nn_spec]
-        except: raise ValueError("nn-spec must be a list of integer values")
-        nn = NeuralNetwork(args.nn_spec[0],
-                           args.nn_spec[1:-1],
-                           args.nn_spec[-1])
-    elif args.load_nn: nn = args.load_nn
-    else: raise Exception("Must specify a neural network.")
-
-    # load the classification function & generate data
-    fn = args.function_spec
-
-    if fn: 
-        test_set = classify_pts(fn, gen_pts((args.l_xlim,args.r_xlim),
-                                            (args.l_ylim,args.r_ylim),
-                                            args.testn))
-        training_set = classify_pts(fn, gen_pts((args.l_xlim,args.r_xlim),
-                                                (args.l_ylim,args.r_ylim),
-                                                args.trainn))
-
-    # not implemented
-    if args.tuningn:
-        training_set = classify_pts(fn, gen_pts((args.l_xlim,args.r_xlim),
-                                                (args.l_ylim,args.r_ylim),
-                                                args.args.tuningn))
-        print "tuning not implemented"
-
-    elif args.targete:
-        target_error = args.targete
-
-    if args.debug: 
-        print nn        
-
-    if args.train:
-        print "before training error: ", nn.error(test_set)
-        nn.train(training_set, args.epochs, args.alpha)
-        if args.debug: print nn
-
-    if args.run:
-        exec "run_set = " + args.run
-        nn.run_on(run_set)
-    
-    if args.train: print "neural network error: ", nn.error(test_set)
-
-    # image settings
-    if args.training_png or args.test_png:
-        if not fn: raise Exception("Need to specify a function in order to classify data")
-        try:
-            import matplotlib
-            matplotlib.use('Agg')
-            import matplotlib.pyplot as p
-            import numpy as np
-        except: ImportError("matplotlib & numpy must be installed in order to display graphs")
-        x = np.arange(args.l_xlim,args.r_xlim,(-args.l_xlim + args.r_xlim)/2000.0)
-        y = [fn(i) for i in x]
-        if args.training_png:
-            p.clf()
-            above_ptsx = []
-            above_ptsy = []
-            below_ptsy = []
-            below_ptsx = []
-            for (example,_) in training_set:
-                if nn.run(example)[0] >= 0.5: # arbitrary cutoff
-                    above_ptsx.append(example[0])
-                    above_ptsy.append(example[1])
-                else:
-                    below_ptsx.append(example[0])
-                    below_ptsy.append(example[1])
-            p.xlim((args.l_xlim,args.r_xlim))
-            p.ylim((args.l_ylim,args.r_ylim))
-            p.scatter(above_ptsx, above_ptsy, color='#ee0000', s=3, marker="x")
-            p.scatter(below_ptsx, below_ptsy, color='#0044ee', s=3, marker="x")
-            p.plot(x, y, "g-", color="#009900", linewidth=1)
-            p.grid()
-            p.savefig(args.training_png)
-        if args.test_png:
-            p.clf()
-            above_ptsx = []
-            above_ptsy = []
-            below_ptsy = []
-            below_ptsx = []
-            for (example,_) in test_set:
-                if nn.run(example)[0] >= 0.5: # arbitrary cutoff
-                    above_ptsx.append(example[0])
-                    above_ptsy.append(example[1])
-                else:
-                    below_ptsx.append(example[0])
-                    below_ptsy.append(example[1])
-            p.xlim((args.l_xlim,args.r_xlim))
-            p.ylim((args.l_ylim,args.r_ylim))
-            p.scatter(above_ptsx, above_ptsy, color='#ee0000', s=3, marker="x")
-            p.scatter(below_ptsx, below_ptsy, color='#0044ee', s=3, marker="x")
-            p.plot(x, y, "g-", color="#009900", linewidth=1)
-            p.grid()
-            p.savefig(args.test_png)
-
-    if args.save_nn: save_nn(nn, args.save_nn)
 
 def demo():
     """A small demo exhibiting various features of the neural network."""
